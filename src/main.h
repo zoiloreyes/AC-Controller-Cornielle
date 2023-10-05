@@ -25,9 +25,9 @@ const char *autoconf_ssid = "ESP8266 Smart AC"; //AP name for WiFi setup AP whic
 const char *autoconf_pwd = "12345678";          //AP password so noone else can connect to the ESP in case your router fails
 const char *mqtt_server = "192.168.1.15";       //MQTT Server IP, your home MQTT server eg Mosquitto on RPi, or some public MQTT
 const int mqtt_port = 1883;                     //MQTT Server PORT, default is 1883 but can be anything.
-const int btnPower = D5;
+const int btnPower = D7;
 const int btnUp = D6;
-const int btnDn = D7;
+const int btnDn = D5;
 const int btnSwing = 3;
 const int btnSpeed = 1;
 const int ldrPin = A0;
@@ -45,11 +45,12 @@ String service_name_secondary = "smart_ac_basic";
 
 // Global variables
 unsigned int isOn = false;
-unsigned int setTemp = 23;
+unsigned int setTemp = 25;
+unsigned int visTemp = 25;
+unsigned int minTemp = 22;
 unsigned int isCool = true; //false = fan mode
 unsigned int fanSpeed = 0;     //0: Auto, 1:Min, 2:Medium, 3:High
 unsigned int maxTemp = 28;
-unsigned int minTemp = 18;
 unsigned int currentAction = 0;
 bool isSwing = false;
 bool rotary_1 = false;

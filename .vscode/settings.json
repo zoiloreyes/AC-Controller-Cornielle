@@ -12,6 +12,7 @@
         "vector": "cpp",
         "initializer_list": "cpp",
         "functional": "cpp",
-        "type_traits": "cpp"
+        "type_traits": "cpp",
+        "set": "cpp"
     }
 }

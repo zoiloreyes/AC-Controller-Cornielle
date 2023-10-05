@@ -8,7 +8,7 @@
 #include <ArduinoOTA.h>
 #include <math.h>
 #include <U8g2lib.h>
-#include <ir_Samsung.h>
+#include <ir_Gree.h>
 #include <NTPClient.h>
 
 #define MQTT_MAX_PACKET_SIZE 512
@@ -26,16 +26,17 @@
 #endif
 
 // Global Variable
-const int OLED_ckl = D3;
-const int OLED_sdin = D2;
-const int OLED_rst = D1;
 const int OLED_cs = D0;
+const int OLED_rst = D1;
+const int OLED_sdin = D2;
+const int OLED_ckl = D3;
+const int OLED_dc = D4;
 WiFiClient espClient;
 WiFiManager wifiManager;
 PubSubClient client(espClient);
-IRSamsungAc ac(IR_pin);
+IRGreeAC ac(IR_pin);
 IRsend irsend(IR_pin);
-U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
+U8G2_SSD1322_NHD_256X64_1_4W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /*dc=*/OLED_dc, /* reset=*/OLED_rst); // OLED Display
 
 // Set up the NTP UDP client
 WiFiUDP ntpUDP;
@@ -51,23 +52,23 @@ void btnSwingInt()
 {
   isSwing = !isSwing;
   update();
-  updateServerValue();
+  //updateServerValue();
 }
 
 void btnSpeedInt()
 {
   fanSpeed = ++fanSpeed % 4;
   update();
-  updateServerValue();
+  //updateServerValue();
 }
 
 // function for up-down interrupt
-void ICACHE_RAM_ATTR btnUpInt()
+void IRAM_ATTR btnUpInt()
 {
   currentAction = ACTION_UP;
 }
 
-void ICACHE_RAM_ATTR btnDnInt()
+void IRAM_ATTR btnDnInt()
 {
   currentAction = ACTION_DOWN;
 }
@@ -76,7 +77,7 @@ void changeACmode()
 {
   isCool = !isCool;
   update();
-  updateServerValue();
+  //updateServerValue();
 }
 
 void updateDisplay()
@@ -89,7 +90,13 @@ void updateDisplay()
   {
 
     char currentTemp[3];
-    String(setTemp).toCharArray(currentTemp, 3);
+    String(visTemp).toCharArray(currentTemp, 3);
+    Serial.print("Visible Temp: ");
+    Serial.println(visTemp);
+
+    Serial.print("Actual Temp Temp: ");
+    Serial.println(setTemp);
+    
     do
     {
       u8g2.drawBox(205, 4, 2, 55);
@@ -178,12 +185,15 @@ void update()
   static bool lastIsSwing = isSwing;
   static int lastFanSpeed = fanSpeed;
   static int lastIsCool = isCool;
-
-  if (setTemp == lastTemp && isSwing == lastIsSwing && lastFanSpeed == fanSpeed && lastIsCool == isCool && isLastOn == isOn)
+  if (visTemp == lastTemp && isSwing == lastIsSwing && lastFanSpeed == fanSpeed && lastIsCool == isCool && isLastOn == isOn)
     return;
 
+  //Display is always off;
+  //ac.setLight(false);
+  //ac.setLightToggle(false);
   if (isOn)
   {
+    Serial.println("Power On");  
     ac.on();
     if (isCool)
     {
@@ -195,29 +205,29 @@ void update()
       lastIsCool = true;
 
       //Set and send commands
-      ac.setMode(kSamsungAcCool);
-      switch (fanSpeed)
+      ac.setMode(kGreeCool);
+      /*switch (fanSpeed)
       {
       case (0):
-        ac.setFan(kSamsungAcFanAuto);
+        ac.setFan(kGreeAcFanAuto);
         break;
       case (1):
-        ac.setFan(kSamsungAcFanLow);
+        ac.setFan(kGreeAcFanLow);
         break;
       case (2):
-        ac.setFan(kSamsungAcFanMed);
+        ac.setFan(kGreeAcFanMed);
         break;
       case (3):
-        ac.setFan(kSamsungAcFanHigh);
+        ac.setFan(kGreeAcFanHigh);
         break;
-      }
+      }*/
 
-      ac.setSwing(isSwing);
+      //ac.setSwing(isSwing);
       ac.setTemp(setTemp);
     }
     else
     {
-      ac.setMode(kSamsungAcFan);
+      ac.setMode(kGreeFan);
       lastIsCool = false;
     }
 
@@ -227,9 +237,11 @@ void update()
   {
     Serial.println("Send off");
     isLastOn = false;
+    Serial.println("Power Off");  
 
     //set and send command
     ac.off();
+    ac.send();
     irsend.sendRaw(ac_off, 349, 38); //I need to send raw for off because Library didn't work.
   }
 
@@ -364,27 +376,34 @@ void increment()
 {
   if (!isCool)
     return;
-  setTemp++;
+  if (visTemp >= setTemp) {
+    setTemp++;  
+  }
+  visTemp++;
   update();
-  updateServerValue();
+  //updateServerValue();
 }
 
 void decrement()
 {
   if (!isCool)
     return;
-  setTemp--;
+
+  if(setTemp > minTemp) {
+    setTemp--;
+  }
+  visTemp--;
   update();
-  updateServerValue();
+  //updateServerValue();
 }
 
 void power()
 {
   ACOnOff();
-  updateServerValue();
+  //updateServerValue();
 }
 
-void ICACHE_RAM_ATTR btnPowerPressed()
+void IRAM_ATTR btnPowerPressed()
 {
   // int press_millis = millis();
   // while (digitalRead(btnPower) == LOW)
@@ -402,6 +421,7 @@ void ICACHE_RAM_ATTR btnPowerPressed()
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
+  Serial.println("Callback?");
   char c_payload[length];
   memcpy(c_payload, payload, length);
   c_payload[length] = '\0';
@@ -513,7 +533,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     update();
   }
 
-  updateServerValue();
+  //updateServerValue();
 }
 
 void autoAdjustScreenBrightness()
@@ -572,12 +592,12 @@ void setup()
   pinMode(2, OUTPUT);
 
   // Setup networking
-  Serial.println("Setting up network");
-  wifiManager.setConfigPortalTimeout(120);
-  wifiManager.autoConnect(autoconf_ssid, autoconf_pwd);
-  setup_ota();
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
+  //Serial.println("Setting up network");
+  //wifiManager.setConfigPortalTimeout(120);
+  //wifiManager.autoConnect(autoconf_ssid, autoconf_pwd);
+  //setup_ota();
+  //client.setServer(mqtt_server, mqtt_port);
+  //client.setCallback(callback);
 
   //Attach interrupt for manual button controls
   Serial.println("Attaching Interupt");
@@ -587,7 +607,7 @@ void setup()
 
   digitalWrite(2, HIGH);
   updateDisplay();
-  updateServerValue();
+  //updateServerValue();
 
   //Setup IR Lib
   Serial.println("Setting up IR Lib");
@@ -595,37 +615,42 @@ void setup()
   irsend.begin();
 
   //Start the NTP UDP client
-  Serial.println("Setting up NTP Client");
-  timeClient.begin();
+  //Serial.println("Setting up NTP Client");
+  //timeClient.begin();
 
+  power();
 
   Serial.println("Setup done!");
 }
 
 void handleCurrentAction()
 {
+  
 
   switch (currentAction)
   {
-  case ACTION_UP:
-  {
-    increment();
-    break;
-  }
-  case ACTION_DOWN:
-  {
-    decrement();
-    break;
-  }
-  case ACTION_POWER:
-  {
-    power();
-    break;
-  }
-  default:
-  {
-    break;
-  }
+    case ACTION_UP:
+    {
+      Serial.println("Action Up");
+      increment();
+      break;
+    }
+    case ACTION_DOWN:
+    {
+      Serial.println("Action Down");
+      decrement();
+      break;
+    }
+    case ACTION_POWER:
+    {
+      Serial.println("Action Power");
+      power();
+      break;
+    }
+    default:
+    {
+      break;
+    }
   }
 
   currentAction = 0;
@@ -633,15 +658,16 @@ void handleCurrentAction()
 
 void loop()
 {
+  /*
   if (!client.connected() && (millis() - lastConnectingTime > 60000 ))
   {
     Serial.println("reconnect");
     reconnect();
     updateDisplay();
     lastConnectingTime = millis();
-  }
-  client.loop();
-  ArduinoOTA.handle();
-  autoAdjustScreenBrightness();
+  }*/
+  //client.loop();
+  //ArduinoOTA.handle();
+  //autoAdjustScreenBrightness();
   handleCurrentAction();
 }
