@@ -13,6 +13,9 @@
         "initializer_list": "cpp",
         "functional": "cpp",
         "type_traits": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "ranges": "cpp"
     }
 }

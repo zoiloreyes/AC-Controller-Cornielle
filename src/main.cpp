@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
-#include <PubSubClient.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
@@ -10,10 +9,6 @@
 #include <U8g2lib.h>
 #include <ir_Gree.h>
 #include <NTPClient.h>
-
-#define MQTT_MAX_PACKET_SIZE 512
-#define MQTT_SOCKET_TIMEOUT 1
-
 
 #include "main.h"
 #include "ui.h"
@@ -26,17 +21,17 @@
 #endif
 
 // Global Variable
-const int OLED_cs = D0;
-const int OLED_rst = D1;
-const int OLED_sdin = D2;
 const int OLED_ckl = D3;
-const int OLED_dc = D4;
+const int OLED_sdin = D2;
+const int OLED_rst = D1;
+const int OLED_cs = D0;
 WiFiClient espClient;
 WiFiManager wifiManager;
-PubSubClient client(espClient);
+//PubSubClient client(espClient);
 IRGreeAC ac(IR_pin);
 IRsend irsend(IR_pin);
-U8G2_SSD1322_NHD_256X64_1_4W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /*dc=*/OLED_dc, /* reset=*/OLED_rst); // OLED Display
+U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
+
 
 // Set up the NTP UDP client
 WiFiUDP ntpUDP;
@@ -91,11 +86,11 @@ void updateDisplay()
 
     char currentTemp[3];
     String(visTemp).toCharArray(currentTemp, 3);
-    Serial.print("Visible Temp: ");
-    Serial.println(visTemp);
+    //Serial.print("Visible Temp: ");
+    //Serial.println(visTemp);
 
-    Serial.print("Actual Temp Temp: ");
-    Serial.println(setTemp);
+    //Serial.print("Actual Temp Temp: ");
+    //Serial.println(setTemp);
     
     do
     {
@@ -103,10 +98,6 @@ void updateDisplay()
 
       u8g2.drawXBMP(211, 4, 29, 13, wifi);
       
-
-      if(client.connected()){
-         u8g2.drawXBMP(214, 21, 24, 5, mqtt);
-      }
       u8g2.drawXBMP(217, 45, 19, 15, bulb);
 
       if (isCool)
@@ -158,17 +149,17 @@ void updateDisplay()
     unsigned long epoch = timeClient.getEpochTime();
 
     String formattedDate = timeClient.getFormattedTime();
-    Serial.println(formattedDate);
+    //Serial.println(formattedDate);
 
     // Extract date
     int splitT = formattedDate.indexOf("T");
     String dayStamp = formattedDate.substring(0, splitT);
-    Serial.print("DATE: ");
-    Serial.println(dayStamp);
+    //Serial.print("DATE: ");
+    //Serial.println(dayStamp);
     // Extract time
     String timeStamp = formattedDate.substring(splitT + 1, formattedDate.length() - 3);
-    Serial.print("HOUR: ");
-    Serial.println(timeStamp);
+    //Serial.print("HOUR: ");
+    //Serial.println(timeStamp);
 
     do
     {
@@ -176,6 +167,31 @@ void updateDisplay()
       u8g2.drawStr(38, 57, timeStamp.c_str());
     } while (u8g2.nextPage());
   }
+}
+
+void setOn() {
+    ac.on();
+}
+
+void setOff() {
+    ac.off();
+}
+
+void setLight() {
+  ac.setLight(false);
+}
+
+void setCoolMode() {
+  ac.setMode(kGreeCool);
+}
+
+void setACTemp(const uint8_t desired) {
+  ac.setTemp(setTemp);
+}
+
+void send() {
+  ac.send();
+  updateDisplay();
 }
 
 void update()
@@ -189,12 +205,12 @@ void update()
     return;
 
   //Display is always off;
-  //ac.setLight(false);
-  //ac.setLightToggle(false);
+  setLight();
   if (isOn)
   {
-    Serial.println("Power On");  
-    ac.on();
+    //Serial.println("Power On");  
+    setOn();
+
     if (isCool)
     {
       Serial.println("Send IR : temp = " + String(setTemp) + " swing = " + String(isSwing) + " Fan Speed : " + String(fanSpeed) + " IsLastOn : " + isLastOn);
@@ -205,106 +221,39 @@ void update()
       lastIsCool = true;
 
       //Set and send commands
-      ac.setMode(kGreeCool);
-      /*switch (fanSpeed)
-      {
-      case (0):
-        ac.setFan(kGreeAcFanAuto);
-        break;
-      case (1):
-        ac.setFan(kGreeAcFanLow);
-        break;
-      case (2):
-        ac.setFan(kGreeAcFanMed);
-        break;
-      case (3):
-        ac.setFan(kGreeAcFanHigh);
-        break;
-      }*/
-
+      setCoolMode();
       //ac.setSwing(isSwing);
-      ac.setTemp(setTemp);
+      setACTemp(setTemp);
     }
     else
     {
-      ac.setMode(kGreeFan);
+      //ac.setMode(kGreeFan);
       lastIsCool = false;
     }
 
-    ac.send();
+    send();
   }
   else if (isLastOn)
   {
-    Serial.println("Send off");
+    //Serial.println("Send off");
     isLastOn = false;
-    Serial.println("Power Off");  
+    //Serial.println("Power Off");  
 
     //set and send command
-    ac.off();
-    ac.send();
-    irsend.sendRaw(ac_off, 349, 38); //I need to send raw for off because Library didn't work.
+    setOff();
+    send();
+    
+    //irsend.sendRaw(ac_off, 349, 38); //I need to send raw for off because Library didn't work.
   }
 
   //Turn on Display
-  Serial.println("UpdateDisplay");
-  previousMillis = millis();
-  currentContrast = 255;
-  u8g2.setContrast(currentContrast);
+  //Serial.println("UpdateDisplay");
+  //previousMillis = millis();
+  //currentContrast = 255;
+  //u8g2.setContrast(currentContrast);
 
-  updateDisplay();
+  //updateDisplay();
 }
-
-void updateServerValue()
-{
-
-  /*!!-- Need to redefine MQTT_MAX_PACKET_SIZE 256 --!! */
-
-  String value;
-  String message;
-  char data[200];
-
-  //Primary
-  // message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"CurrentTemperature\", \"value\" : " + String(setTemp) + "}";
-  // message.toCharArray(data, (message.length() + 1));
-  message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CurrentTemperature\",\"value\":" + String(setTemp) + "}";
-  client.publish(mqtt_device_value_to_set_topic, message.c_str());
-
-  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
-
-  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"SwingMode\", \"value\" : " + String(isSwing) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
-
-  message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CoolingThresholdTemperature\",\"value\":" + String(setTemp) + " }";
-  client.publish(mqtt_device_value_to_set_topic, message.c_str());
-
-  message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"RotationSpeed\", \"value\" : " + String(fanSpeed) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
-
-  if (isCool)
-  {
-    message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CurrentHeaterCoolerState\",\"value\":1}";
-    client.publish(mqtt_device_value_to_set_topic, message.c_str());
-    message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"TargetHeaterCoolerState\",\"value\":2}";
-    client.publish(mqtt_device_value_to_set_topic, message.c_str());
-  }
-  else
-  {
-    message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"CurrentHeaterCoolerState\",\"value\":2}";
-    client.publish(mqtt_device_value_to_set_topic, message.c_str());
-    message = "{\"name\": \"Smart AC\",\"service_name\": \"smart_ac\",\"characteristic\": \"TargetHeaterCoolerState\",\"value\":1}";
-    client.publish(mqtt_device_value_to_set_topic, message.c_str());
-  }
-
-  //Secondary
-  message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
-  message.toCharArray(data, (message.length() + 1));
-  client.publish(mqtt_device_value_to_set_topic, data);
-}
-
 void blink()
 {
   //Blink on received MQTT message
@@ -346,12 +295,12 @@ void ACOnOff()
 {
   if (!isOn)
   {
-    Serial.println("AC On");
+    //Serial.println("AC On");
     isOn = true;
   }
   else
   {
-    Serial.println("AC Off");
+    //Serial.println("AC Off");
     isOn = false;
   }
   update();
@@ -363,12 +312,6 @@ void reconnect()
     String clientId = "ESP8266Client-";
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
-
-    if (client.connect(clientId.c_str()))
-    {
-      // Once connected, resubscribe.
-      client.subscribe(mqtt_device_value_from_set_topic);
-    }
   
 }
 
@@ -470,7 +413,6 @@ void callback(char *topic, byte *payload, unsigned int length)
     char data[150];
     String message = "{\"name\" : \"" + device_name_secondary + "\", \"service_name\" : \"" + service_name_secondary + "\", \"characteristic\" : \"On\", \"value\" : " + String(isOn) + "}";
     message.toCharArray(data, (message.length() + 1));
-    client.publish(mqtt_device_value_to_set_topic, data);
   }
   if (strcmp(characteristic, "On") == 0)
   {
@@ -486,7 +428,6 @@ void callback(char *topic, byte *payload, unsigned int length)
     char data[150];
     String message = "{\"name\" : \"" + device_name + "\", \"service_name\" : \"" + service_name + "\", \"characteristic\" : \"Active\", \"value\" : " + String(isOn) + "}";
     message.toCharArray(data, (message.length() + 1));
-    client.publish(mqtt_device_value_to_set_topic, data);
   }
 
   if (strcmp(characteristic, "SwingMode") == 0)
@@ -536,39 +477,6 @@ void callback(char *topic, byte *payload, unsigned int length)
   //updateServerValue();
 }
 
-void autoAdjustScreenBrightness()
-{
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - previousMillis >= screenBrightnessUpdateInt)
-  {
-
-    // Serial.println(analogRead(ldrPin));
-    // save the last time you blinked the LED
-    previousMillis = currentMillis;
-
-    if (analogRead(ldrPin) < 85 && currentContrast != 0)
-    {
-      u8g2.clear();
-      Serial.println("Clear");
-    }
-    else if (analogRead(ldrPin) < 400 && currentContrast != 1 || !isOn)
-    {
-      currentContrast = 1;
-      u8g2.setContrast(currentContrast);
-      updateDisplay();
-    }
-    else if (analogRead(ldrPin) >= 400)
-    {
-      u8g2.setContrast(255);
-      // u8g2.setContrast(1);
-
-      currentContrast = 255;
-      updateDisplay();
-    }
-  }
-}
-
 void setup()
 {
   Serial.begin(9600);
@@ -592,7 +500,8 @@ void setup()
   pinMode(2, OUTPUT);
 
   // Setup networking
-  //Serial.println("Setting up network");
+  Serial.println("Setting up network");
+  WiFi.begin(ssid,password);
   //wifiManager.setConfigPortalTimeout(120);
   //wifiManager.autoConnect(autoconf_ssid, autoconf_pwd);
   //setup_ota();
@@ -615,8 +524,8 @@ void setup()
   irsend.begin();
 
   //Start the NTP UDP client
-  //Serial.println("Setting up NTP Client");
-  //timeClient.begin();
+  Serial.println("Setting up NTP Client");
+  timeClient.begin();
 
   power();
 
@@ -625,8 +534,6 @@ void setup()
 
 void handleCurrentAction()
 {
-  
-
   switch (currentAction)
   {
     case ACTION_UP:
