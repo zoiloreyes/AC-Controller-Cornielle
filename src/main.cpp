@@ -7,7 +7,7 @@
 #include <ArduinoOTA.h>
 #include <math.h>
 #include <U8g2lib.h>
-#include <ir_Gree.h>
+#include <ir_Coolix.h>
 #include <NTPClient.h>
 
 #include "main.h"
@@ -28,7 +28,7 @@ const int OLED_cs = D0;
 WiFiClient espClient;
 WiFiManager wifiManager;
 //PubSubClient client(espClient);
-IRGreeAC ac(IR_pin);
+IRCoolixAC ac(IR_pin);
 IRsend irsend(IR_pin);
 U8G2_SSD1322_NHD_256X64_1_3W_SW_SPI u8g2(U8G2_R2, /* clock=*/OLED_ckl, /* data=*/OLED_sdin, /* cs=*/OLED_cs, /* reset=*/OLED_rst); // OLED Display
 
@@ -178,11 +178,11 @@ void setOff() {
 }
 
 void setLight() {
-  ac.setLight(false);
+  if(ac.getLed()) ac.setLed();
 }
 
 void setCoolMode() {
-  ac.setMode(kGreeCool);
+  ac.setMode(kCoolixCool);
 }
 
 void setACTemp(const uint8_t desired) {
